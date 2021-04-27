@@ -173,18 +173,24 @@ func getGifDimensions(gif *gif.GIF) (x, y int) {
 }
 
 func makeGif(names []string) {
-	// op := gif.Options{NumColors: 256, Quantizer: nil, Drawer: nil}
-	gifWriter, err := os.Create("new.gif")
-	if err != nil {
-		fmt.Println("something went wrong")
-	}
+	outGif := &gif.GIF{}
 	for _, name := range names {
 		fmt.Println(name)
-		im, _ := os.Open(name)
-		jpeg, _ := png.Decode(im)
-		pm := image.NewPaletted(jpeg.Bounds(), palette.WebSafe)
-		draw.Draw(pm, jpeg.Bounds(), jpeg, image.Point{}, draw.Over)
-		// gif.Encode(gifWriter, jpeg, &op)
-		err = gif.Encode(gifWriter, pm, nil)
+		f, err := os.Open(name)
+		if err != nil {
+			panic(err)
+		}
+		defer f.Close()
+		png, _, err := image.Decode(f)
+		if err != nil {
+			panic(err)
+		}
+		palettedImage := image.NewPaletted(png.Bounds(), palette.Plan9)
+		draw.Draw(palettedImage, palettedImage.Rect, png, png.Bounds().Min, draw.Over)
+		outGif.Image = append(outGif.Image, palettedImage)
+		outGif.Delay = append(outGif.Delay, 0)
 	}
+	f, _ := os.OpenFile("out.gif", os.O_WRONLY|os.O_CREATE, 0600)
+	defer f.Close()
+	gif.EncodeAll(f, outGif)
 }
