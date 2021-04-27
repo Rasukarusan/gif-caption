@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"image"
-	"image/color"
+	"image/color/palette"
 	"image/draw"
 	"image/gif"
 	"image/png"
@@ -20,6 +20,8 @@ import (
 
 func main() {
 	fmt.Println("start!!")
+
+	// 対象のGIFを読み込む
 	filename := os.Args[1]
 	f, err := os.Open(filename)
 	if err != nil {
@@ -28,18 +30,29 @@ func main() {
 	defer f.Close()
 
 	// GIF分割
-	splitGIF(f)
-
-	// 文字を挿入したい画像を読み込む
-	file, err := os.Open("nekoko.png")
+	names, err := splitGif(f)
 	if err != nil {
-		log.Fatalf("failed to open file: %s", err.Error())
+		log.Fatalf(err.Error())
 	}
-	defer file.Close()
 
-	// 文字を挿入
-	addLabel(file)
+	for i := 0; i < 5; i++ {
+		// 最初のフレームに文字を挿入
+		f1, err := os.Open(names[i])
+		if err != nil {
+			log.Fatalf("failed to open file: %s", err.Error())
+		}
+		defer f1.Close()
+		addLabel(f1, "START")
 
+		// 最後のフレームに文字を挿入
+		f2, err := os.Open(names[len(names)-i-1])
+		if err != nil {
+			log.Fatalf("failed to open file: %s", err.Error())
+		}
+		defer f2.Close()
+		addLabel(f2, "END")
+	}
+	makeGif(names)
 }
 
 func loadFont() (font *truetype.Font) {
@@ -54,15 +67,15 @@ func loadFont() (font *truetype.Font) {
 	return ft
 }
 
-func addLabel(reader io.Reader) {
-	img, err := png.Decode(reader)
+func addLabel(file *os.File, text string) {
+	img, err := png.Decode(file)
 	if err != nil {
 		log.Fatalf("failed to decode image: %s", err.Error())
 	}
 	dst := image.NewRGBA(img.Bounds())
 	draw.Draw(dst, dst.Bounds(), img, image.Point{}, draw.Src)
 
-	col := color.RGBA{125, 184, 236, 1.0}
+	// col := color.RGBA{255, 255, 255, 1.0}
 	opt := truetype.Options{
 		Size: 40,
 	}
@@ -74,14 +87,13 @@ func addLabel(reader io.Reader) {
 
 	d := &font.Drawer{
 		Dst:  dst,
-		Src:  image.NewUniform(col),
+		Src:  image.White,
 		Face: face,
 		Dot:  dot,
 	}
-	text := "てすと"
 	d.DrawString(text)
 
-	newFile, err := os.Create("out.png")
+	newFile, err := os.Create(file.Name())
 	if err != nil {
 		log.Fatalf("failed to create file: %s", err.Error())
 	}
@@ -96,7 +108,7 @@ func addLabel(reader io.Reader) {
 
 // @thanks https://stackoverflow.com/questions/33295023/how-to-split-gif-into-images
 // Decode reads and analyzes the given reader as a GIF image
-func splitGIF(reader io.Reader) (err error) {
+func splitGif(reader io.Reader) (names []string, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("Error while decoding: %s", r)
@@ -106,7 +118,7 @@ func splitGIF(reader io.Reader) (err error) {
 	gif, err := gif.DecodeAll(reader)
 
 	if err != nil {
-		return err
+		return []string{""}, err
 	}
 
 	imgWidth, imgHeight := getGifDimensions(gif)
@@ -114,24 +126,27 @@ func splitGIF(reader io.Reader) (err error) {
 	overpaintImage := image.NewRGBA(image.Rect(0, 0, imgWidth, imgHeight))
 	draw.Draw(overpaintImage, overpaintImage.Bounds(), gif.Image[0], image.ZP, draw.Src)
 
+	// ns := make([]string, len(gif.Image))
+	var ns []string
 	for i, srcImg := range gif.Image {
 		draw.Draw(overpaintImage, overpaintImage.Bounds(), srcImg, image.ZP, draw.Over)
 
 		// save current frame "stack". This will overwrite an existing file with that name
 		file, err := os.Create(fmt.Sprintf("%s%d%s", "temp", i, ".png"))
 		if err != nil {
-			return err
+			return []string{""}, err
 		}
 
 		err = png.Encode(file, overpaintImage)
 		if err != nil {
-			return err
+			return []string{""}, err
 		}
 
+		ns = append(ns, file.Name())
 		file.Close()
 	}
 
-	return nil
+	return ns, nil
 }
 
 func getGifDimensions(gif *gif.GIF) (x, y int) {
@@ -156,4 +171,21 @@ func getGifDimensions(gif *gif.GIF) (x, y int) {
 	}
 
 	return highestX - lowestX, highestY - lowestY
+}
+
+func makeGif(names []string) {
+	// op := gif.Options{NumColors: 256, Quantizer: nil, Drawer: nil}
+	gifWriter, err := os.Create("new.gif")
+	if err != nil {
+		fmt.Println("something went wrong")
+	}
+	for _, name := range names {
+		fmt.Println(name)
+		im, _ := os.Open(name)
+		jpeg, _ := png.Decode(im)
+		pm := image.NewPaletted(jpeg.Bounds(), palette.WebSafe)
+		draw.Draw(pm, jpeg.Bounds(), jpeg, image.Point{}, draw.Over)
+		// gif.Encode(gifWriter, jpeg, &op)
+		err = gif.Encode(gifWriter, pm, nil)
+	}
 }
