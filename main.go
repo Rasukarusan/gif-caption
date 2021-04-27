@@ -98,12 +98,11 @@ func addLabel(file *os.File, text string) {
 		log.Fatalf("failed to create file: %s", err.Error())
 	}
 	defer newFile.Close()
-
 	b := bufio.NewWriter(newFile)
 	if err := png.Encode(b, dst); err != nil {
 		log.Fatalf("failed to encode image: %s", err.Error())
 	}
-
+	b.Flush()
 }
 
 // @thanks https://stackoverflow.com/questions/33295023/how-to-split-gif-into-images
