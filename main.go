@@ -12,14 +12,19 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/golang/freetype/truetype"
 	"golang.org/x/image/font"
 	"golang.org/x/image/math/fixed"
 )
 
+const prefixTempFile = "temp"
+
 func main() {
 	fmt.Println("start!!")
+
+	defer removeTempFile()
 
 	// 対象のGIFを読み込む
 	filename := os.Args[1]
@@ -35,24 +40,28 @@ func main() {
 		log.Fatalf(err.Error())
 	}
 
+	// 最初のフレームに文字を挿入
 	for i := 0; i < 5; i++ {
-		// 最初のフレームに文字を挿入
 		f1, err := os.Open(names[i])
 		if err != nil {
 			log.Fatalf("failed to open file: %s", err.Error())
 		}
 		defer f1.Close()
 		addLabel(f1, "START")
-
-		// 最後のフレームに文字を挿入
-		f2, err := os.Open(names[len(names)-i-1])
-		if err != nil {
-			log.Fatalf("failed to open file: %s", err.Error())
-		}
-		defer f2.Close()
-		addLabel(f2, "END")
 	}
 	makeGif(names)
+}
+
+func removeTempFile() {
+	files, err := filepath.Glob(prefixTempFile + "*")
+	if err != nil {
+		panic(err)
+	}
+	for _, f := range files {
+		if err := os.Remove(f); err != nil {
+			panic(err)
+		}
+	}
 }
 
 func loadFont() (font *truetype.Font) {
@@ -131,7 +140,7 @@ func splitGif(reader io.Reader) (names []string, err error) {
 		draw.Draw(overpaintImage, overpaintImage.Bounds(), srcImg, image.ZP, draw.Over)
 
 		// save current frame "stack". This will overwrite an existing file with that name
-		file, err := os.Create(fmt.Sprintf("%s%d%s", "temp", i, ".png"))
+		file, err := os.Create(fmt.Sprintf("%s%d%s", prefixTempFile, i, ".png"))
 		if err != nil {
 			return []string{""}, err
 		}
