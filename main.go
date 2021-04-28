@@ -12,7 +12,9 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 
 	"github.com/golang/freetype/truetype"
 	"golang.org/x/image/font"
@@ -25,6 +27,15 @@ func main() {
 	fmt.Println("start!!")
 
 	defer removeTempFile()
+
+	go func() {
+		trap := make(chan os.Signal, 1)
+		signal.Notify(trap, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGINT)
+		s := <-trap
+		fmt.Printf("Received signal %s\n", s)
+		removeTempFile()
+		os.Exit(1)
+	}()
 
 	// 対象のGIFを読み込む
 	filename := os.Args[1]
@@ -81,6 +92,7 @@ func addLabel(file *os.File, text string) {
 	if err != nil {
 		log.Fatalf("failed to decode image: %s", err.Error())
 	}
+	fmt.Println(img.Bounds())
 	dst := image.NewRGBA(img.Bounds())
 	draw.Draw(dst, dst.Bounds(), img, image.Point{}, draw.Src)
 
