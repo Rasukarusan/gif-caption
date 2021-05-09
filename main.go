@@ -146,12 +146,10 @@ func splitGif(reader io.Reader) (names []string, err error) {
 	overpaintImage := image.NewRGBA(image.Rect(0, 0, imgWidth, imgHeight))
 	draw.Draw(overpaintImage, overpaintImage.Bounds(), gif.Image[0], image.ZP, draw.Src)
 
-	// ns := make([]string, len(gif.Image))
 	var ns []string
 	for i, srcImg := range gif.Image {
 		draw.Draw(overpaintImage, overpaintImage.Bounds(), srcImg, image.ZP, draw.Over)
 
-		// save current frame "stack". This will overwrite an existing file with that name
 		file, err := os.Create(fmt.Sprintf("%s%d%s", prefixTempFile, i, ".png"))
 		if err != nil {
 			return []string{""}, err
